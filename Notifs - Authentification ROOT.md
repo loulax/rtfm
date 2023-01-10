@@ -28,7 +28,7 @@ user          [MAIL]
 password      [PASSWORD]
 
 # Set a default account
-account default : octopuce
+account default : default
 ```
 
 On attribut les bons droits au fichier.
@@ -59,7 +59,7 @@ Afin que l'envoie de mail se fasse automatiquement lorsqu'un utilisateur se conn
 ```bash
 $ vim /root/.bashrc
 [...]
-echo "<h2><b>Serveur `hostname` - Nouvelle connexion SSH</b></h2><br><b>- Hôte distant : </b>`hostname`<br><b>- Utilisateur : </b>`whoami`<br><b>- Date : </b>`date`" | /usr/bin/mail -r "egide@cyberzen.com" -s "Connexion SSH" "[EMAIL DU DESTINATAIRE]" -a "Content-Type: text/html"
+echo "<h2><b>Serveur `hostname` - Nouvelle connexion SSH</b></h2><br><b>- Hôte distant : </b>`hostname`<br><b>- Utilisateur : </b>`whoami`<br><b>- Date : </b>`date`" | /usr/bin/mail -r [EMAIL EXPEDITEUR] -s "Connexion SSH" "[EMAIL DU DESTINATAIRE]" -a "Content-Type: text/html"
 ```
 
 Le mail reçu aura la forme suivante :

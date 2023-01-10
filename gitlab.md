@@ -16,7 +16,7 @@ Une adresse IP fixe (4.15) a été attribué à la machine virtuelle.
 
 A ce moment, il faut setup le DNS avant de continuer. L'adresse du Serveur sera https://gitlab.mydomain.com. Pour se faire j'ai donc ajouté cette ligne au fichier de configuration de DNS de MyDomain :
 
-    # vi /etc/bind/db.0xf220363
+    # vi /etc/bind/db.xxxxx
     gitlab  IN      A       192.168.4.15
 
 Ne pas oublier également d'ajouter cette ligne ‡ la db du VPN. Sans oublier d'incrémenter de 1 la valeur du sérial, puis de relancer bind avec : 
