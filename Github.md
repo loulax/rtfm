@@ -35,7 +35,7 @@ The key's randomart image is:
 |  o ++.          |
 +----[SHA256]-----+
 ➜  ~ 
-$ git config --add --local core.sshCommand "ssh -i <ssk_key_path>"
+$ git config --add --global core.sshCommand "ssh -i <ssk_key_path>"
 $ git config --global user.email "<your email>"
 $ git config --global user.name "<your name>"
 ```
