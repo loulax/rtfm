@@ -101,6 +101,25 @@ server {
 }
 ```
 
+Le coffre vaultwarden inclut une page d'administration accessible à l'adresse https://mydomain.tld/admin, cet espace permet de paramétrer pleins de choses, notamment gérer les utilisateurs etc ce qui est par conséquent une zone très sensible. Nous allons rajouter la section suivante dans vaultwarden avec de ne pas permettre à n'importe qui d'y accéder.
+```nginx
+   location /admin {
+
+	allow <réseau autorisé>;
+	deny all;
+
+	proxy_set_header "Connection" "";
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://localhost:8080/admin;
+}
+```
+Cette section contrôle toutes les ip qui accèdes à /admiin et si ça ne match pas avec la directive allow <réseau autorisé>; une erreur 403 sera retourné. 
+Alors soit on autorise depuis sont réseau local ou depuis un vpn voir les 2 selon le cas de chacun.
+
 ## Iptables
 
 maintenant il faut mettre les règles iptables adéquates pour faire fonctionner le container, sachant que docker en créé initialement. Je vais créer un service pour gérer les règles :
