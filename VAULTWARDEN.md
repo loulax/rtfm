@@ -102,6 +102,7 @@ server {
 ```
 
 Le coffre vaultwarden inclut une page d'administration accessible à l'adresse https://mydomain.tld/admin, cet espace permet de paramétrer pleins de choses, notamment gérer les utilisateurs etc ce qui est par conséquent une zone très sensible. Nous allons rajouter la section suivante dans vaultwarden avec de ne pas permettre à n'importe qui d'y accéder.
+
 ```nginx
    location /admin {
 
@@ -127,7 +128,7 @@ maintenant il faut mettre les règles iptables adéquates pour faire fonctionner
 ```bash
 #Création des règles de pare-feu
 vim /etc/init.d/fw_up.sh
-'''
+
 #CREATEION DES CHAINES DOCKER
 /usr/sbin/iptables -N DOCKER
 /usr/sbin/iptables -N DOCKER-ISOLATION-STAGE-1
@@ -165,10 +166,6 @@ vim /etc/init.d/fw_up.sh
 
 ```
 
-
-
-```
-
 Maintenant rendez-vous à l'adresse web configuré dans nginx pour accéder au container vaultwarden https://sub.mydomain.tld/admin
 
 ![](img/admin_bw.png)
@@ -181,7 +178,7 @@ Et enfin validez en bas à gauche.
 
 Il sera probablement nécessaire de redémarrer le container, pour ce faire:
 
-```
+```bash
 docker stop <container name>
 docker start <container name>
 #pour y accéder
