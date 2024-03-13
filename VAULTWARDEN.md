@@ -122,125 +122,52 @@ Alors soit on autorise depuis sont réseau local ou depuis un vpn voir les 2 sel
 
 ## Iptables
 
-maintenant il faut mettre les règles iptables adéquates pour faire fonctionner le container, sachant que docker en créé initialement. Je vais créer un service pour gérer les règles :
+maintenant il faut mettre les règles iptables adéquates pour faire fonctionner le container, sachant que docker en créé initialement (se référer à ma doc iptables pour la gestion d'un service et gérer les règles iptables) :
 
 ```bash
 #Création des règles de pare-feu
 vim /etc/init.d/fw_up.sh
 '''
-#!/bin/bash
+#CREATEION DES CHAINES DOCKER
+/usr/sbin/iptables -N DOCKER
+/usr/sbin/iptables -N DOCKER-ISOLATION-STAGE-1
+/usr/sbin/iptables -N DOCKER-ISOLATION-STAGE-2
+/usr/sbin/iptables -N DOCKER-USER
+/usr/sbin/iptables -t nat -N DOCKER
 
-#RESET FIREWALL
-iptables -F
-iptables -t nat -F
-iptables -X
-iptables -t nat -X
+#LOCAL TRAFFIC
+/usr/sbin/iptables -A INPUT -i lo -j ACCEPT
+/usr/sbin/iptables -A OUTPUT -o lo -j ACCEPT
 
-#DEFINE DEFAULT POLICY
-iptables -P INPUT DROP
-iptables -P OUTPUT DROP
-iptables -P FORWARD DROP
-
-#DEFINE NEW CHAINS
-iptables -N DOCKER
-iptables -N DOCKER-ISOLATION-STAGE-1
-iptables -N DOCKER-ISOLATION-STAGE-2
-iptables -N DOCKER-USER
-iptables -t nat -N DOCKER
-iptables -N fw_in
-iptables -N fw_out
-iptables -N fw_fw
-iptables -t nat -N pre_route
-iptables -t nat -N post_route
-iptables -A INPUT -j fw_in
-iptables -A OUTPUT -j fw_out
-iptables -A FORWARD -j fw_fw
-iptables -A POSTROUTING -t nat -j post_route
-iptables -A PREROUTING -t nat -j pre_route
-
-#ALLOW LOOPBACK
-iptables -A fw_fin -i lo -j ACCEPT
-iptables -A fw_out -o lo -j ACCEPT
-
-#ALLOW SSH
-iptables -A fw_in -i ens33 -p tcp --dport 1432 -m conntack --ctstate NEW,ESTABLISHED -j ACCEPT
-iptables -A fw_out -o ens33 -p tcp --sport 1432 -m conntrack --ctstate ESTABLISHED -j ACCEPT
-
-#NGINX
-iptables -A fw_in -p tcp -m multiport --dports 80,443 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
-iptables -A fw_out -p tcp -m multiport --sports 80,443 -m conntrack --ctstate ESTABLISHED -j ACCEPT
-
-#SMTP (Pour l'envoi de mail aux clients vaultwarden)
-iptables -A fw_in -p tcp --sport 587 -m conntrack --ctstate ESTABLISHED -j ACCEPT
-iptables -A fw_out -p tcp --dport 587 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+#Autoriser le traffic web
+/usr/sbin/iptables -A INPUT -p tcp -m multiport --dports 80,443 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+/usr/sbin/iptables -A OUTPUT -p tcp -m multiport --sports 80,443 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 
 #DOCKER
-iptables -A fw_fw -j DOCKER-USER
-iptables -A fw_fw -j DOCKER-ISOLATION-STAGE-1
-iptables -A fw_fw -o docker0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-iptables -A fw_fw -i docker0 ! -o docker0 -j ACCEPT
-iptables -A fw_fw -i docker0 -o docker0 -j ACCEPT
-iptables -A DOCKER -d 172.17.0.2/32 ! -i docker0 -o docker0 -p tcp --dport 80 -j ACCEPT
-iptables -A DOCKER-ISOLATION-STAGE-1 -i docker0 ! -o docker0 -j DOCKER-ISOLATION-STAGE-2
-iptables -A DOCKER-ISOLATION-STAGE-1 -j RETURN
-iptables -A DOCKER-ISOLATION-STAGE-2 -o docker0 -j DROP
-iptables -A DOCKER-ISOLATION-STAGE-2 -j RETURN
-iptables -A DOCKER-USER -j RETURN
+/usr/sbin/iptables -A FORWARD -j DOCKER-USER
+/usr/sbin/iptables -A FORWARD -j DOCKER-ISOLATION-STAGE-1
+/usr/sbin/iptables -A FORWARD -o docker0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+/usr/sbin/iptables -A FORWARD -o docker0 -j DOCKER
+/usr/sbin/iptables -A FORWARD -i docker0 ! -o docker0 -j ACCEPT
+/usr/sbin/iptables -A FORWARD -i docker0 -o docker0 -j ACCEPT
+/usr/sbin/iptables -A DOCKER -d 172.17.0.2/32 ! -i docker0 -o docker0 -p tcp -m tcp --dport 80 -j ACCEPT
+/usr/sbin/iptables -A DOCKER-ISOLATION-STAGE-1 -i docker0 ! -o docker0 -j DOCKER-ISOLATION-STAGE-2
+/usr/sbin/iptables -A DOCKER-ISOLATION-STAGE-1 -j RETURN
+/usr/sbin/iptables -A DOCKER-ISOLATION-STAGE-2 -o docker0 -j DROP
+/usr/sbin/iptables -A DOCKER-ISOLATION-STAGE-2 -j RETURN
+/usr/sbin/iptables -A DOCKER-USER -j RETURN
+/usr/sbin/iptables -t nat -A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER
+/usr/sbin/iptables -t nat -A OUTPUT ! -d 127.0.0.0/8 -m addrtype --dst-type LOCAL -j DOCKER
+/usr/sbin/iptables -t nat -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
+/usr/sbin/iptables -t nat -A POSTROUTING -s 172.17.0.2/32 -d 172.17.0.2/32 -p tcp -m tcp --dport 80 -j MASQUERADE
+/usr/sbin/iptables -t nat -A DOCKER -i docker0 -j RETURN
+/usr/sbin/iptables -t nat -A DOCKER ! -i docker0 -p tcp -m tcp --dport 9090 -j DNAT --to-destination 172.17.0.2:80
 
-iptables -t nat -A pre_route -d <public ip> -p tcp --dport 3012 -j DNAT --to-destination 172.17.0.2:3012
-iptables -t nat -A pre_route -m addrtype --dst-type LOCAL -j DOCKER
-iptables -t nat -A OUTPUT ! -d 127.0.0.0/8 -m addrtype --dst-type LOCAL -j DOCKER
-iptables -t nat -A post_route -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
-#iptables -t nat -A POSTROUING -s 172.17.0.2/32 -d 172.17.0.2/32 -p tcp --dport 80 -j MASQUERADE
-iptables -t nat -A DOCKER -i docker0 -j RETURN
-iptables -t nat -A DOCKER ! -i docker0 -p tcp --dport 8080 -j DNAT --to-destination 172.17.0.2:80
-
-
-## Création des règles pour restorer le pare-feu
-vim /etc/init.d/fw_off.sh
-#!/bin/bash
-iptables -F
-iptables -X
-iptables -Z
-iptables -t nat -F
-iptables -t nat -X
-iptables -P INPUT ACCEPT
-iptables -P OUTPUT ACCEPT
-iptables -P FORWARD ACCEPT
-
-
-# Il faut rendre les 2 scripts exécutable
-chmod +x /etc/init.d/fw_*.sh
 ```
 
 
 
-```bash
-#Création du service
-vim /lib/systemd/system/firewall.service
-
-/lib/systemd/system/firewall.service
-[Unit]
-Description=FIREWALL IPTABLES
-Requires=network-online.target
-After=network-online.target
-
-[Service]
-User=root
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/etc/init.d/fw_up.sh
-ExecStop=/etc/init.d/fw_off.sh
-
-[Install]
-WantedBy=multi-user.target
-
-
-# Il faut maintenant recharger le service et le rendre bootable au démarrage (Attention avant qu'il ne démarre automatiquement, il faut s'assurer que les règles de pare-feu soit bonnes pour le SSH autrement il y aura plus d'accès à celui-ci en SSH...)
-systemctl daemon-reload && systemctl start firewall && systemctl enable firewall
 ```
-
-
 
 Maintenant rendez-vous à l'adresse web configuré dans nginx pour accéder au container vaultwarden https://sub.mydomain.tld/admin
 
@@ -270,7 +197,7 @@ Une tache cron est programmé sur le container docker qui sauvegardera le fichie
 Pour transférer manuellement le fichier db.sqlite3 depuis le container vers l'hote utiliser la commande suivante :
 
 ```
-docker cp <docker container>:/data/db.sqlite3 /chemin-destination
+docker cp <container name>:/data/db.sqlite3 /chemin-destination
 ```
 
 Puis si nécessaire utiliser SSH ou FTP afin de mettre le fichier en lieu sûr en cas de panne du serveur hote.
@@ -280,7 +207,7 @@ Puis si nécessaire utiliser SSH ou FTP afin de mettre le fichier en lieu sûr e
 Si dans un cas on a besoin de migrer son container sur un autre serveur, revenir à l'étape de déploiement du container puis restaurer le fichier sql comme ceci:
 
 ```
-docker cp db.sqlite3 <docker container>:/data/
+docker cp db.sqlite3 <container name>:/data/
 ```
 
 Attention, il va falloir stop le container et le relancer pour pouvoir prendre en compte le dernier fichier et ainsi récupérer les données importer.
