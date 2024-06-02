@@ -25,21 +25,32 @@ Pour permettre l'accès via une clé, il va falloir générer sur l'appareil uti
 
 **Ce chiffrement va faire le lien entre une clé publique et privé pour vérifier l'hôte qui tente de se connecter, la clé publique se trouve sur le serveur et le client utilisera la clé privé pour se connecter.**
 
-Dans un premier temps, il demande à quel endroit stocker le fichier et le nom de celui-ci
+## Génération d'une clé
+
+Pour génrérer une clé, il faut utiliser la commande suivante :
+
+```
+ssh-keygen -t rsa -b 4096
+```
+
+-t : Permet de spécifier l'algorithme de chiffrement à utiliser pour la clé, ici RSA (l'algorithme à ce jour le plus sûr)
+-b : La taille en Mo que la paire de clé va avoir. Evidemment plus celle-ci est grande plus elle sera difficile à casser mais peux aussi prendre plus de temps à générer.
+
+Dans un premier temps, il demande à quel endroit stocker le fichier et le nom de celui-ci. Par défaut une clé est généré sous le nom id_rsa à la racine du répertoire courant de l'utilisateur dans le dossier .ssh.
 
 ```
 Generating public/private rsa key pair.
 Enter file in which to save the key (/Users/loulax/.ssh/id_rsa): raspberry-key
 ```
 
-Ensuite, si l'on veut mettre une "passphrase" pour l'accès à cette clé, c'est fortement recommandé principalement dans le cas où c'est un ordinateur portable et que l'on est amené à se déplacer régulièrement avec:
+Ensuite, si l'on veut mettre une "passphrase" pour l'accès à cette clé, c'est fortement recommandé principalement dans le cas où elle se trouve sur un ordinateur portable et que l'on est amené à se déplacer régulièrement avec:
 
 ```
 Enter passphrase (empty for no passphrase):
 Enter same passphrase again:
 ```
 
-Si l'on veut pas de passphrase, faire ENTER 2x pour passer cette étape, puis la clé sera générée 
+**Si l'on veut pas de passphrase, faire ENTRER 2x pour passer cette étape, puis la clé sera générée** 
 
 ```
 Your identification has been saved in raspberry-key
