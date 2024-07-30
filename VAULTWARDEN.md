@@ -208,3 +208,277 @@ docker cp db.sqlite3 <container name>:/data/
 ```
 
 Attention, il va falloir stop le container et le relancer pour pouvoir prendre en compte le dernier fichier et ainsi récupérer les données importer.
+
+## Mettre à jour de vaultwarden
+
+Vu que c'est un outil open-source qui est maintenant, il reçoit régulièrement des mises à jour. C'est pourquoi il est important de le maintenant à sa dernière version stable pour d'abord éviter les bugs si il y en a et également pour la sécurité de son coffre, si une faille de sécurité est découverte. L'idée est de vérifier si il existe une version supérieur est dans ce cas récupérer la dernière image depuis le dépot git puis mettre à jour ensuite les containers.
+
+J'ai écrit un script bash qui permet d'automatiser tout ça dont voici le contenu :
+
+```bash
+#!/bin/bash
+
+# black='\e[0;30m'
+# grey='\e[1;30m'
+darkred='\e[0;31m'
+# pink='\e[1;31m'
+darkgreen='\e[0;32m'
+lightgreen='\e[1;32m'
+orange='\e[0;33m'
+# yellow='\e[1;33m'
+darkblue='\e[0;34m'
+lightblue='\e[1;34m'
+# darkpurple='\e[0;35m'
+# lightpurple='\e[1;35m'
+# darkcyan='\e[0;36m'
+# lightcyan='\e[1;36m'
+# lightgrey='\e[0;37m'
+# white='\e[1;37m'
+color_off='\e[0;m'
+
+function getDockerStatus {
+
+    if systemctl status docker &>/dev/null; then
+
+        echo "running"
+
+    else
+
+        return 0
+
+    fi
+
+}
+
+dockerStatus=$(getDockerStatus)
+os=$(awk -F= '/^ID=/{print $2}' /etc/os-release | tr -d '"')
+
+function installDocker {
+
+        if [ ! -f /usr/bin/docker ]  && [ "${dockerStatus}" != "running" ]; then
+
+                if [[ "${os}" == "debian" ]]; then
+
+                        echo -e "${lightblue} [+] Installing Docker for Debian ${color_off}"
+
+                        # Add Docker's official GPG key:
+                        apt-get update &>/dev/null
+                        apt-get install ca-certificates curl &>/dev/null
+                        install -m 0755 -d /etc/apt/keyrings &>/dev/null
+                        curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc &>/dev/null
+                        chmod a+r /etc/apt/keyrings/docker.asc
+
+                        # Add the repository to Apt sources:
+                        echo \
+                        "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
+                        $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+                        tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        apt-get update &>/dev/null
+                        apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin &>/dev/null
+
+                        if [[ "${dockerStatus}" == "running" ]]; then
+
+                                echo -e "${lightgreen} [!] Docker installed successfully ${color_off}"
+
+                        fi
+
+
+                fi
+
+                if [[ "${os}" == "fedora" ]]; then
+
+                        echo -e "${darkblue} [+] Installing Docker for Fedora ${color_off}"
+                        dnf -y install dnf-plugins-core &>/dev/null
+                        dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo &>/dev/null
+                        dnf install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin &>/dev/null
+
+                        if [[ "${dockerStatus}" == "running" ]]; then
+
+                                echo -e "${lightgreen} [!] Docker installed successfully ${color_off}"
+
+                        fi
+                fi
+
+        else
+
+                echo -e "${darkred} [!] Docker is already installed and active! ${color_off}"
+
+        fi
+}
+
+function deployVault {
+
+        if [[ "${dockerStatus}" == "running" ]]; then
+
+                echo -e "${lightblue} [+] Déploiement de vaultwarden ... ${color_off}"
+                read -rp "Give me the container name : " container
+                token=$(openssl rand -base64 64)
+                if [ ! -d "${DIR}"/vault ]; then
+                        mkdir /root/vault
+                fi
+                docker run -d --name "${container}" -e ADMIN_TOKEN="${token}" -v /root/vault:/data -p 8080:80 vaultwarden/server:latest &>/dev/null
+
+                echo -e "${lightgreen} [!] Vaultwarden Admin Token (Please save it securely and clear the terminal after) : $token ${color_off}"
+
+                if docker container ls | grep -q "${container}"; then
+
+                        echo -e "${lightgreen} [-] Vaultwarden has been deployed successfully ${color_off}"
+
+                fi
+
+        else
+
+                echo -e "${darkred} [!] Docker is not running... ${color_off}"
+
+        fi
+}
+
+function updateVault {
+
+   if [[ "${dockerStatus}" == "running" ]]; then
+
+        removeContainer vault &>/dev/null
+        removeContainer vault-backup &>/dev/null
+
+        echo -e "${lightgreen} [+] Updating vaultwarden image from its official repository ${color_off}"
+        docker rmi vaultwarden/server:latest
+        docker pull vaultwarden/server:latest
+
+        echo -e "${darkblue} Redeploying vault containers..."
+        docker run -d --name vault -e ADMIN_TOKEN="Securefox34" -v /root/vault:/data --restart unless-stopped -p 9090:80 vaultwarden/server:latest
+        docker run -d --name vault-backup -e ADMIN_TOKEN="Securefox34" -v /root/vault:/data --restart unless-stopped -p 9191:80 vaultwarden/server:latest
+
+    else
+
+        echo -e "${darkred} [!] Docker is not running... ${color_off}"
+
+    fi
+}
+
+function removeContainer {
+
+    if [[ "${dockerStatus}" == "running" ]]; then
+
+        if [ "$#" -ge 1 ]; then
+
+                if docker ps -a | grep -E "(^|\s)$1($|\s)"; then
+
+                        echo -e "${darkblue} [+] Removing $1 ${color_off}"
+                        docker stop "$1" &>/dev/null
+                        docker rm "$1" &>/dev/null
+                else
+
+                        echo -e "${darkred} [!] This container is not present ${color_off}"
+
+                fi
+
+        else
+
+                echo -e "${darkred} [!] At least 1 argument is needed to call this function ${color_off}"
+
+        fi
+
+    else
+
+        echo -e "${darkred} [!] Docker is not running ${color_off}"
+
+   fi
+
+}
+
+function removeDocker {
+
+        if [ -f /usr/bin/docker ] && [ "${dockerStatus}" == "running" ] ; then
+
+                echo -e "${lightblue} [+] Removing Docker... ${color_off}"
+
+                container=$(docker ps -a)
+                img=$(docker images)
+
+                if [[ "${os}" == "debian" ]]; then
+
+                        rm /etc/apt/sources.list.d/docker.list /usr/bin/docker
+                        docker rm "$container" &>/dev/null
+                        docker rmi "$img" &>/dev/null
+                        apt-get -y remove --purge docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin &>/dev/null
+
+
+                        if [[ ! "${dockerStatus}" == "running" ]]; then
+
+                                echo -e "${lightgreen} [-] Docker has been removed successfully ${color_off}"
+
+                        fi
+
+                elif [[ "${os}" == "fedora" ]]; then
+
+                        docker rm "$container" &>/dev/null
+                        docker rmi "$img" &>/dev/null
+                        dnf remove dnf-plugins-core docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin &>/dev/null
+
+                        if [ "${dockerStatus}" != "running" ]; then
+
+                                echo -e "${lightgreen} [!] Docker has been removed successfully ${color_off}"
+
+                        fi
+
+                fi
+
+        else
+
+                echo -e "${darkred} [-] Docker is not installed ${color_off}"
+
+        fi
+
+}
+
+
+if [[ $(getDockerStatus) == "running" ]]; then
+
+        echo "docker is running"
+
+fi
+
+if [[ "$1" == "--install" ]]; then
+
+    installDocker
+
+fi
+
+if [[ "$1" == "--set-vault" ]]; then
+
+    deployVault
+
+fi
+
+if [[ "$1" == "--remove" ]]; then
+
+        removeDocker
+
+fi
+
+if [[ "$1" == "--removeContainer" ]]; then
+
+        removeContainer
+
+fi
+
+if [[ "$1" == "--updateVault" ]]; then
+
+        updateVault
+
+fi
+```
+
+Ce script apporte plusieurs autres fonctions mais pour l'utiliser dans notre cas, voici la commande:
+
+```
+./docker.sh --updateVault
+```
+
+Afin d'automatiser ensuite son exécution, j'ai personnellement choisi cron comme solution (bien que j'en connaisse pas d'autre pour cet usage ^^) et j'ai choisi de l'exécuter tous les 1er du mois. 
+
+```
+# crontab -e 
+0 0 1 * * /bin/bash /root/scripts/docker --updateVault
+```
+
